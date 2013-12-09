@@ -39,7 +39,7 @@ using namespace mapnik;
         self.geometryFlipped = NO;
         self.canReplaceMapContent = YES;
         self.maximumZ = 20;
-        self.minimumZ = 8;
+        self.minimumZ = 1;
         self.style = [NSString stringWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"style" ofType:@"xml"] encoding:NSUTF8StringEncoding error:nil];
         self.style = [self.style stringByReplacingOccurrencesOfString:@"RESOURCE_PATH" withString:[NSBundle mainBundle].resourcePath];
 
