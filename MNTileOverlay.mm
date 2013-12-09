@@ -104,8 +104,8 @@ using namespace mapnik;
 
 -(box2d<double>)convertPathTo2dBox:(MKTileOverlayPath)path{
   
-    CLLocationDegrees topLatitude = convertTileXPathToLatitude(path.y, path.z);
-    CLLocationDegrees belowLatitude = convertTileXPathToLatitude(path.y + 1, path.z);
+    CLLocationDegrees topLatitude = convertTileYPathToLatitude(path.y, path.z);
+    CLLocationDegrees belowLatitude = convertTileYPathToLatitude(path.y + 1, path.z);
     CLLocationDegrees westLongitude = convertTileXPathToLongitude(path.x, path.z);
     CLLocationDegrees rightLongitude = convertTileXPathToLongitude(path.x + 1, path.z);
     
@@ -130,7 +130,7 @@ static CLLocationDegrees convertTileXPathToLongitude(NSInteger xPath, NSInteger 
 
 }
 
-static CLLocationDegrees convertTileXPathToLatitude(NSInteger yPath, NSInteger zPath) {
+static CLLocationDegrees convertTileYPathToLatitude(NSInteger yPath, NSInteger zPath) {
     
     double n = M_PI - (2.0 * M_PI * yPath) / pow(2.0, zPath);
     return radiansToDegrees(atan(sinh(n)));
