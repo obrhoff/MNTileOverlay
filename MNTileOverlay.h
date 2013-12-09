@@ -7,9 +7,13 @@
 
 #import <Foundation/Foundation.h>
 #import <MapKit/MapKit.h>
+#import <CoreLocation/CoreLocation.h>
 
 @interface MNTileOverlay : MKTileOverlay
 
-@property (nonatomic) NSString *style;
+@property (strong, nonatomic) NSString *style;
+@property (strong, nonatomic) NSOperationQueue *mapOperationQueue;
+
+-(id)initWithStyle: (NSURL*)styleFile;
 
 @end

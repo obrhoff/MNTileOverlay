@@ -6,11 +6,9 @@
 //
 
 #import "MNTileOverlay.h"
-
-#import <CoreLocation/CoreLocation.h>
-
 #include <math.h>
 
+#include <mapnik/map.hpp>
 #include <mapnik/graphics.hpp>
 #include <mapnik/color.hpp>
 #include <mapnik/image_util.hpp>
@@ -19,10 +17,6 @@
 #include <mapnik/datasource_cache.hpp>
 #include <mapnik/datasource.hpp>
 
-#include <mapnik/map.hpp>
-
-#define CONVERT_SPHERE 0.149291
-#define MERCATOR_RANGE 256;
 #define degreesToRadians(x)    (x * M_PI / 180)
 #define radiansToDegrees(x)    (x * 180 / M_PI)
 
@@ -36,12 +30,13 @@ using namespace mapnik;
     
     if (self) {
         
-        self.geometryFlipped = NO;
         self.canReplaceMapContent = YES;
+        self.geometryFlipped = NO;
         self.maximumZ = 20;
         self.minimumZ = 1;
-        self.style = [NSString stringWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"style" ofType:@"xml"] encoding:NSUTF8StringEncoding error:nil];
-        self.style = [self.style stringByReplacingOccurrencesOfString:@"RESOURCE_PATH" withString:[NSBundle mainBundle].resourcePath];
+        
+        self.mapOperationQueue = [NSOperationQueue new];
+        self.mapOperationQueue.maxConcurrentOperationCount = 4;
 
     }
     
@@ -49,15 +44,28 @@ using namespace mapnik;
     
 }
 
--(void)loadTileAtPath:(MKTileOverlayPath)path result:(void (^)(NSData *, NSError *))result{
+-(id)initWithStyle: (NSURL*)styleFile{
     
-    // should be probably wrapped into an NSOperation for better control furthermore implement something to cache tiles into this part
-    dispatch_async(dispatch_get_global_queue( DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    self = [self init];
+    
+    if (self) {
+        
+        self.style = [NSString stringWithContentsOfFile:styleFile.path encoding:NSUTF8StringEncoding error:nil];
+        self.style = [self.style stringByReplacingOccurrencesOfString:@"RESOURCE_PATH" withString:[NSBundle mainBundle].resourcePath];
+        
+    }
+    
+    return self;
+    
+}
+
+- (void)loadTileAtPath:(MKTileOverlayPath)path result:(void (^)(NSData *tileData, NSError *error))result{
+
+    [self.mapOperationQueue addOperationWithBlock:^{
         NSData *image = [self renderTileForPath:path];
         result(image, NULL);
-        
-    });
-
+    }];
+    
 }
 
 -(NSData*)renderTileForPath: (MKTileOverlayPath)path;{
@@ -67,7 +75,6 @@ using namespace mapnik;
     
     load_map_string(m, std::string(self.style.UTF8String));
     m.zoom_to_box([self convertPathTo2dBox:path]);
-    //  m.zoom_all();
     agg_renderer<mapnik::image_32> ren(m,im);
     ren.apply();
     
@@ -104,8 +111,8 @@ using namespace mapnik;
 
 -(box2d<double>)convertPathTo2dBox:(MKTileOverlayPath)path{
   
-    CLLocationDegrees topLatitude = convertTileYPathToLatitude(path.y, path.z);
-    CLLocationDegrees belowLatitude = convertTileYPathToLatitude(path.y + 1, path.z);
+    CLLocationDegrees topLatitude = convertTileXPathToLatitude(path.y, path.z);
+    CLLocationDegrees belowLatitude = convertTileXPathToLatitude(path.y + 1, path.z);
     CLLocationDegrees westLongitude = convertTileXPathToLongitude(path.x, path.z);
     CLLocationDegrees rightLongitude = convertTileXPathToLongitude(path.x + 1, path.z);
     
@@ -130,7 +137,7 @@ static CLLocationDegrees convertTileXPathToLongitude(NSInteger xPath, NSInteger 
 
 }
 
-static CLLocationDegrees convertTileYPathToLatitude(NSInteger yPath, NSInteger zPath) {
+static CLLocationDegrees convertTileXPathToLatitude(NSInteger yPath, NSInteger zPath) {
     
     double n = M_PI - (2.0 * M_PI * yPath) / pow(2.0, zPath);
     return radiansToDegrees(atan(sinh(n)));
