@@ -22,36 +22,39 @@
 
 using namespace mapnik;
 
+@interface MNTileOverlay()
+
+@property (nonatomic, strong) dispatch_queue_t renderQueue;
+
+@end
+
 @implementation MNTileOverlay
 
--(id)init{
+-(id)init
+{
     
     self = [super init];
     
     if (self) {
-        
         self.canReplaceMapContent = YES;
         self.geometryFlipped = NO;
         self.maximumZ = 20;
-        self.minimumZ = 1;
-        
-        self.mapOperationQueue = [NSOperationQueue new];
-        self.mapOperationQueue.maxConcurrentOperationCount = 4;
-
+        self.minimumZ = 4;
     }
     
     return self;
     
 }
 
--(id)initWithStyle: (NSURL*)styleFile{
+-(id)initWithStyle: (NSURL*)styleFile
+{
     
     self = [self init];
-    
     if (self) {
         
-        self.style = [NSString stringWithContentsOfFile:styleFile.path encoding:NSUTF8StringEncoding error:nil];
-        self.style = [self.style stringByReplacingOccurrencesOfString:@"RESOURCE_PATH" withString:[NSBundle mainBundle].resourcePath];
+        NSError *error;
+        NSString *styleContent = [NSString stringWithContentsOfURL:styleFile encoding:NSUTF8StringEncoding error:&error];
+        self.style = [styleContent stringByReplacingOccurrencesOfString:@"RESOURCE_PATH" withString:[NSBundle mainBundle].resourcePath];
         
     }
     
@@ -59,12 +62,14 @@ using namespace mapnik;
     
 }
 
-- (void)loadTileAtPath:(MKTileOverlayPath)path result:(void (^)(NSData *tileData, NSError *error))result{
+- (void)loadTileAtPath:(MKTileOverlayPath)path result:(void (^)(NSData *tileData, NSError *error))result
+{
 
-    [self.mapOperationQueue addOperationWithBlock:^{
+    if (!_renderQueue) _renderQueue = dispatch_queue_create("renderQueue", DISPATCH_QUEUE_CONCURRENT);
+    dispatch_async(_renderQueue, ^{
         NSData *image = [self renderTileForPath:path];
         result(image, NULL);
-    }];
+    });
     
 }
 
@@ -72,9 +77,10 @@ using namespace mapnik;
 
     image_32 im(self.tileSize.width, self.tileSize.height);
     Map m(im.width(),im.height());
-    
     load_map_string(m, std::string(self.style.UTF8String));
+    
     m.zoom_to_box([self convertPathTo2dBox:path]);
+
     agg_renderer<mapnik::image_32> ren(m,im);
     ren.apply();
     
@@ -111,8 +117,9 @@ using namespace mapnik;
 
 -(box2d<double>)convertPathTo2dBox:(MKTileOverlayPath)path{
   
-    CLLocationDegrees topLatitude = convertTileXPathToLatitude(path.y, path.z);
-    CLLocationDegrees belowLatitude = convertTileXPathToLatitude(path.y + 1, path.z);
+    CLLocationDegrees topLatitude = convertTileYPathToLatitude(path.y, path.z);
+    CLLocationDegrees belowLatitude = convertTileYPathToLatitude(path.y + 1, path.z);
+    
     CLLocationDegrees westLongitude = convertTileXPathToLongitude(path.x, path.z);
     CLLocationDegrees rightLongitude = convertTileXPathToLongitude(path.x + 1, path.z);
     
@@ -121,27 +128,31 @@ using namespace mapnik;
 }
 
 
-static CLLocationCoordinate2D getLatitudeLongitudeForPath(MKTileOverlayPath path) {
+static CGPoint getPixelFromLatitudeLongitude(CLLocationCoordinate2D coord) {
     
-    CGFloat n = M_PI - 2 * M_PI * path.y / pow(2,path.z);
-    CGFloat centerLatitude = path.x / pow(2, path.z) * 360 - 180;
-    CGFloat centerLongitude = 180 / M_PI * atan(0.5 * (exp(n) - exp(-n)));
+    CGFloat y = (((-1 * coord.latitude) + 90) * (256 / 180));
+    CGFloat x = (180.0 + coord.longitude) * (256 / 360.0);
+    return CGPointMake(x, y);
+    
+}
 
+static CLLocationCoordinate2D getLatitudeLongitudeForPath(MKTileOverlayPath path) {
+
+    CGFloat n = M_PI - 2 * M_PI * path.y / pow(2,path.z);
+    CGFloat centerLongitude = path.x / pow(2, path.z) * 360 - 180;
+    CGFloat centerLatitude = 180 / M_PI * atan(0.5 * (exp(n) - exp(-n)));
     return CLLocationCoordinate2DMake(centerLatitude, centerLongitude);
 
 }
 
-static CLLocationDegrees convertTileXPathToLongitude(NSInteger xPath, NSInteger zPath) {
-   
-    return (xPath / pow(2.0, zPath) * 360.0 - 180);
-
+static CLLocationDegrees convertTileXPathToLongitude(NSInteger xPath, NSInteger zPath)
+{
+    return (xPath / pow(2.0, zPath) * 360.0 - 180.0);
 }
 
-static CLLocationDegrees convertTileXPathToLatitude(NSInteger yPath, NSInteger zPath) {
-    
-    double n = M_PI - (2.0 * M_PI * yPath) / pow(2.0, zPath);
-    return radiansToDegrees(atan(sinh(n)));
-    
+static CLLocationDegrees convertTileYPathToLatitude(NSInteger yPath, NSInteger zPath)
+{
+    return radiansToDegrees(atan(sinh(M_PI - (2.0 * M_PI * yPath) / pow(2.0, zPath))));
 }
 
 @end

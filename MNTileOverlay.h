@@ -12,7 +12,6 @@
 @interface MNTileOverlay : MKTileOverlay
 
 @property (strong, nonatomic) NSString *style;
-@property (strong, nonatomic) NSOperationQueue *mapOperationQueue;
 
 -(id)initWithStyle: (NSURL*)styleFile;
 
